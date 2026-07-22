@@ -177,6 +177,42 @@ button{cursor:pointer;}
 .pe-check{font-family:-apple-system,sans-serif;font-size:12.5px;color:var(--ink);display:flex;align-items:center;gap:6px;cursor:pointer;}
 .pe-raw{font-family:-apple-system,sans-serif;font-size:10.5px;font-weight:700;color:var(--sage-deep);background:#eef3ec;border-radius:5px;padding:1px 6px;margin-left:4px;white-space:nowrap;}
 .pe-raw-none{color:var(--muted);background:#f1efe6;font-weight:600;}
+
+/* Desglose por dominio */
+.dom-details{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden;}
+.dom-summary{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;list-style:none;background:var(--sand-light);font-family:-apple-system,sans-serif;}
+.dom-summary::-webkit-details-marker{display:none;}
+.dom-details[open] .dom-summary{border-bottom:1px solid var(--line);}
+.dom-num{font-size:12px;font-weight:800;color:var(--petrol-deep);min-width:18px;}
+.dom-title{flex:1;font-size:13px;font-weight:700;color:var(--petrol-deep);}
+.dom-badge{font-size:11px;font-weight:700;color:#fff;padding:3px 9px;border-radius:20px;white-space:nowrap;}
+.dom-body{padding:10px 14px 12px;}
+.st-row{display:grid;grid-template-columns:1fr 1.4fr;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);}
+.st-row:last-child{border-bottom:none;}
+.st-name{font-family:-apple-system,sans-serif;font-size:12.5px;color:var(--ink);}
+.st-score{display:flex;flex-direction:column;gap:3px;}
+.st-label{font-family:-apple-system,sans-serif;font-size:12px;font-weight:700;color:var(--petrol-deep);}
+.st-bar-track{height:6px;background:var(--line);border-radius:4px;overflow:hidden;}
+.st-bar-fill{height:100%;border-radius:4px;transition:width 0.4s ease;}
+@media(max-width:640px){.st-row{grid-template-columns:1fr;gap:4px;}}
+
+/* Sesiones guardadas */
+.sessions-list{display:flex;flex-direction:column;gap:10px;margin-top:16px;}
+.session-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:.15s;}
+.session-card:hover{border-color:var(--sage);box-shadow:0 2px 8px rgba(26,92,90,.1);}
+.session-card-info{flex:1;}
+.session-card-name{font-size:14px;font-weight:700;color:var(--petrol-d);}
+.session-card-meta{font-size:12px;color:var(--muted);margin-top:2px;}
+.session-card-pct{font-size:13px;font-weight:800;color:var(--sage);}
+.session-card-actions{display:flex;gap:6px;}
+.btn-ghost{background:transparent;border:1px solid var(--line);color:var(--muted);padding:5px 10px;border-radius:7px;font-size:12px;cursor:pointer;font-weight:600;}
+.btn-ghost:hover{background:var(--sand);}
+.btn-ghost.del:hover{border-color:var(--red);color:var(--red);}
+.divider{display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--muted);font-size:12px;}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--line);}
+.import-zone{border:2px dashed var(--line);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:.15s;background:#fafaf8;}
+.import-zone:hover{border-color:var(--sage);background:#eef7f4;}
+.import-zone p{font-size:13px;color:var(--muted);margin-top:6px;}
 </style>
 </head>
 <body>
@@ -655,9 +691,9 @@ function formatTime(s){ return `${String(Math.floor(s/60)).padStart(2,'0')}:${St
 function esc(s){ if(s==null)return''; return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function getVal(dc,sc,ic){ return state.responses[itemKey(dc,sc,ic)]; }
-function setVal(dc,sc,ic,v){ state.responses[itemKey(dc,sc,ic)]=v; }
+function setVal(dc,sc,ic,v){ state.responses[itemKey(dc,sc,ic)]=v; saveSession(); }
 function getQual(dc,sc,fc){ return state.qualResponses[qualKey(dc,sc,fc)]; }
-function setQual(dc,sc,fc,v){ state.qualResponses[qualKey(dc,sc,fc)]=v; }
+function setQual(dc,sc,fc,v){ state.qualResponses[qualKey(dc,sc,fc)]=v; saveSession(); }
 
 function itemScore(item, rawValue){
   if(rawValue==null||rawValue==='') return 0;
@@ -696,6 +732,113 @@ function overallCompletion(){ return Math.round(TEST_STRUCTURE.reduce((s,d)=>s+c
 // RENDER SHELL
 // ============================================================
 const root=document.getElementById('app');
+
+// ============================================================
+// SISTEMA DE SESIONES — guardado / carga / lista
+// ============================================================
+const SESSION_PREFIX = 'eni2_session_';
+
+function sessionId(){
+  if(!state.patient) return null;
+  return SESSION_PREFIX + state.patient.lastName.toLowerCase().replace(/\s+/g,'_')
+    + '_' + state.patient.birthDate;
+}
+
+function saveSession(){
+  const id = sessionId(); if(!id) return;
+  const snap = {
+    version: 2,
+    savedAt: new Date().toISOString(),
+    patient: state.patient,
+    activeDomainCode: state.activeDomainCode,
+    activeSubtestCode: state.activeSubtestCode,
+    responses: state.responses,
+    qualResponses: state.qualResponses,
+    conclusions: state.conclusions,
+    observations: state.observations,
+    indexStd: state.indexStd,
+    detailPct: state.detailPct,
+    startedAt: state.startedAt,
+  };
+  try{ localStorage.setItem(id, JSON.stringify(snap)); }catch(e){}
+}
+
+function deleteSession(id){
+  if(!confirm('¿Eliminar esta sesión guardada? Esta acción no se puede deshacer.')) return;
+  try{ localStorage.removeItem(id); }catch(e){}
+  renderWelcome();
+}
+
+function listSessions(){
+  const sessions=[];
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(!k.startsWith(SESSION_PREFIX)) continue;
+    try{
+      const d=JSON.parse(localStorage.getItem(k));
+      if(d?.patient) sessions.push({id:k, data:d});
+    }catch(e){}
+  }
+  return sessions.sort((a,b)=>new Date(b.data.savedAt)-new Date(a.data.savedAt));
+}
+
+function loadSessionFromStorage(id){
+  try{
+    const d=JSON.parse(localStorage.getItem(id));
+    restoreSession(d);
+  }catch(e){ showToast('Error al cargar la sesión.'); }
+}
+
+function restoreSession(d){
+  state.patient        = d.patient;
+  state.activeDomainCode  = d.activeDomainCode  || TEST_STRUCTURE[0].code;
+  state.activeSubtestCode = d.activeSubtestCode || null;
+  state.responses      = d.responses      || {};
+  state.qualResponses  = d.qualResponses  || {};
+  state.conclusions    = d.conclusions    || '';
+  state.observations   = d.observations   || '';
+  state.indexStd       = d.indexStd       || {};
+  state.detailPct      = d.detailPct      || {};
+  state.startedAt      = d.startedAt      || new Date().toISOString();
+  state.screen         = 'capture';
+  render();
+  showToast('Sesión cargada — continuando donde quedaste.');
+}
+
+// Exportar sesión a archivo .eni2
+function exportSession(){
+  saveSession();
+  const snap={
+    version:2, exportedAt:new Date().toISOString(),
+    patient:state.patient, activeDomainCode:state.activeDomainCode,
+    activeSubtestCode:state.activeSubtestCode,
+    responses:state.responses, qualResponses:state.qualResponses,
+    conclusions:state.conclusions, observations:state.observations,
+    indexStd:state.indexStd, detailPct:state.detailPct, startedAt:state.startedAt,
+  };
+  const name=`${state.patient?.lastName||'paciente'}_${state.patient?.firstName||''}`.trim().replace(/\s+/g,'_');
+  const blob=new Blob([JSON.stringify(snap,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=`ENI2_${name}_${new Date().toISOString().slice(0,10)}.eni2`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('Sesión exportada correctamente.');
+}
+
+// Importar sesión desde archivo .eni2
+function importSessionFile(input){
+  const file=input.files?.[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(!d.patient) throw new Error('Formato inválido');
+      restoreSession(d);
+    }catch(e){ showToast('Archivo inválido o corrupto.'); }
+  };
+  r.readAsText(file); input.value='';
+}
+
 function render(){
   if(state.screen==='welcome'){ renderWelcome(); return; }
   if(state.screen==='capture'){ renderCapture(); return; }
@@ -707,13 +850,49 @@ function showToast(msg){ const t=document.getElementById('toast'); t.textContent
 // WELCOME SCREEN
 // ============================================================
 function renderWelcome(){
+  const sessions = listSessions();
+  const sessionCards = sessions.length ? `
+    <h3 style="font-size:14px;font-weight:700;color:var(--petrol-d);margin-bottom:4px">📂 Evaluaciones guardadas</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Estas evaluaciones están guardadas en este navegador. Haz clic para continuar o exporta el archivo .eni2 para trabajar en otro equipo.</p>
+    <div class="sessions-list">
+      ${sessions.map(s=>{
+        const p=s.data.patient;
+        const totalR=Object.keys(s.data.responses||{}).length;
+        const saved=new Date(s.data.savedAt).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+        return `<div class="session-card" onclick="loadSessionFromStorage('${s.id}')">
+          <div style="font-size:28px">👤</div>
+          <div class="session-card-info">
+            <div class="session-card-name">${esc(p.firstName)} ${esc(p.lastName)}</div>
+            <div class="session-card-meta">${esc(p.birthDate||'')} · ${esc(p.sex||'')} · Evaluador: ${esc(p.evaluatorName||'')}</div>
+            <div class="session-card-meta">Guardado: ${saved} · ${totalR} respuestas registradas</div>
+          </div>
+          <div class="session-card-actions" onclick="event.stopPropagation()">
+            <button class="btn-ghost" onclick="loadSessionFromStorage('${s.id}')">▶ Continuar</button>
+            <button class="btn-ghost del" onclick="deleteSession('${s.id}')">🗑</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="divider">o iniciar nueva evaluación</div>
+  ` : '';
+
   root.innerHTML=`
   <div style="width:100%;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;">
-    <div class="hero-screen">
+    <div class="hero-screen" style="max-width:680px;width:100%">
       <div class="eyebrow sans">Evaluación Neuropsicológica Infantil</div>
       <h1>ENI-2 · Captura digital</h1>
-      <p class="lead">Complete los datos del paciente para iniciar. La edad se calcula automáticamente y determina las subpruebas aplicables.</p>
+      <p class="lead">Complete los datos del paciente para iniciar o retome una evaluación guardada.</p>
+
+      ${sessionCards}
+
+      <div class="import-zone" onclick="document.getElementById('import-session-input').click()" style="margin-bottom:16px">
+        <div style="font-size:22px">📥</div>
+        <p><strong>Cargar archivo .eni2</strong><br>Si exportaste la sesión desde otro equipo, cárgala aquí para continuar.</p>
+        <input id="import-session-input" type="file" accept=".eni2,.json" style="display:none" onchange="importSessionFile(this)">
+      </div>
+
       <div class="card card-pad" style="text-align:left;">
+        <h3 style="font-size:14px;font-weight:700;color:var(--petrol-d);margin-bottom:14px">Nueva evaluación</h3>
         <div class="form-grid">
           <div class="field"><label>Nombres *</label><input id="f-fn" type="text" placeholder="Nombre del paciente"></div>
           <div class="field"><label>Apellidos *</label><input id="f-ln" type="text" placeholder="Apellido del paciente"></div>
@@ -730,10 +909,6 @@ function renderWelcome(){
           <button class="btn btn-primary" onclick="startEvaluation()">Iniciar evaluación →</button>
         </div>
       </div>
-      <p class="empty-note" style="margin-top:20px;text-align:left;">
-        Toda la información se mantiene en memoria del navegador mientras esta pestaña esté abierta.
-        Descargue el informe PDF al finalizar para conservar un registro permanente.
-      </p>
     </div>
   </div>`;
   document.getElementById('f-td').value=new Date().toISOString().slice(0,10);
@@ -782,7 +957,8 @@ function renderCapture(){
     <div class="topbar">
       <div><h2 id="topbar-title"></h2><div class="sub" id="topbar-sub"></div></div>
       <div class="topbar-actions">
-        <button class="btn btn-secondary btn-sm" onclick="if(confirm('¿Cancelar evaluación? Se perderán todos los datos capturados.')){location.reload();}">Cancelar</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportSession()" title="Exportar para continuar en otro equipo o día">💾 Guardar sesión</button>
+        <button class="btn btn-secondary btn-sm" onclick="if(confirm('¿Volver al inicio? La sesión queda guardada en este navegador y puedes retomar cuando quieras.')){state.screen=\'welcome\';render();}">⟵ Inicio</button>
         <button class="btn btn-gold" onclick="goToResults()">Ver resultados →</button>
       </div>
     </div>
@@ -1281,10 +1457,8 @@ function renderResults(){
         </div>
       </div>
       <div class="card card-pad" style="margin-bottom:22px">
-        <h3 style="margin-bottom:12px">Resumen por dominio</h3>
-        <div class="domain-result-row" style="font-weight:700;font-family:-apple-system,sans-serif;font-size:10.5px;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted)">
-          <div>Dominio</div><div>Puntaje bruto</div><div>Avance</div>
-        </div>${domainRows}
+        <h3 style="margin-bottom:14px">Resumen por dominio y subprueba</h3>
+        ${renderDomainBreakdown(am)}
       </div>
       <p class="empty-note" style="margin-bottom:20px">Los <strong>puntajes brutos</strong> se calculan automáticamente. Las <strong>puntuaciones estándar y percentiles</strong> de los perfiles se toman de los baremos del manual oficial (Apéndice B) según la edad del niño.</p>
       <div class="card card-pad" style="margin-bottom:20px"><h3 style="margin-bottom:8px">Observaciones generales</h3>
@@ -1299,6 +1473,62 @@ function renderResults(){
   renderCharts();
   renderProfiles();
   wireProfileEntry();
+}
+
+
+// ============================================================
+// DESGLOSE POR DOMINIO Y SUBPRUEBA (pantalla de resultados)
+// ============================================================
+function subtestItemScore(item, val){
+  // misma lógica que itemScore pero manejando nulos
+  if(val==null||val==='') return null;
+  return Number(val);
+}
+function renderDomainBreakdown(am){
+  return TEST_STRUCTURE.map((d,di)=>{
+    const appSubs = getApplicableSubtests(d, am);
+    const domRaw  = calcDomainRaw(d);
+    const domMax  = calcDomainMax(d);
+    const domPct  = domMax>0 ? Math.round(domRaw/domMax*100) : null;
+    const hasData = appSubs.some(st=>calcSubtestCompletion(d,st)>0);
+
+    const subsHTML = appSubs.map(st=>{
+      const stRaw  = calcSubtestRaw(d,st);
+      const stMax  = st.items.reduce((a,it)=>a+(it.max>0?it.max:0),0);
+      const stComp = calcSubtestCompletion(d,st);
+      const stPct  = stMax>0 ? Math.round(stRaw/stMax*100) : null;
+      const answered = st.items.filter(it=>{
+        const v=getVal(d.code,st.code,it.code); return v!=null&&v!=='';
+      }).length;
+
+      // barra de rendimiento (% de puntaje obtenido sobre máximo)
+      const barColor = stPct==null?'var(--line)':stPct>=75?'#3fa584':stPct>=50?'#6db38e':stPct>=25?'#d4a443':'#c0534a';
+      const barW     = stPct==null?0:stPct;
+      const label    = stPct!=null
+        ? `${stRaw} / ${stMax} pts (${stPct}%)`
+        : `${answered} / ${st.items.length} ítems respondidos`;
+
+      return `<div class="st-row">
+        <div class="st-name">${esc(st.name)}</div>
+        <div class="st-score">
+          <span class="st-label">${label}</span>
+          <div class="st-bar-track"><div class="st-bar-fill" style="width:${barW}%;background:${barColor}"></div></div>
+        </div>
+      </div>`;
+    }).join('');
+
+    const domColor = domPct==null?'var(--muted)':domPct>=75?'#3fa584':domPct>=50?'#6db38e':domPct>=25?'#d4a443':'#c0534a';
+    const domLabel = domMax>0 ? `${domRaw} / ${domMax} pts · ${domPct}%` : `${domRaw} pts`;
+
+    return `<details class="dom-details" ${hasData?'open':''}>
+      <summary class="dom-summary">
+        <span class="dom-num">${d.code}.</span>
+        <span class="dom-title">${esc(d.name)}</span>
+        <span class="dom-badge" style="background:${domColor}">${domLabel}</span>
+      </summary>
+      <div class="dom-body">${appSubs.length?subsHTML:'<p class="empty-note" style="margin:8px 0 4px">Sin subpruebas aplicables para esta edad.</p>'}</div>
+    </details>`;
+  }).join('');
 }
 
 function renderCharts(){
